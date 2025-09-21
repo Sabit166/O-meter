@@ -1,90 +1,121 @@
 import re
 import sys
 
-def analyze_exponential(code: str) -> str:
 
+
+
+
+def analyze_exponential(code: str) -> str:
+    
+    FOR_LOOP_O_N = r'for\s*\(\s*(int|char|float|double)?\s*(\w+)\s*=.*?[<>=!]+.*?(\+\+|--|[\+-]+=)'
+    FOR_LOOP_O_LOGN = r'for\s*\(\s*(int|char|float|double)?\s*(\w+)\s*=.*?[<>=!]+.*?(\*|/)=\s*\d+'
+
+    WHILE_LOOP_O_N = r'while\s*\(\s*(\w+)(?:\s*[<>=!]+.*?)?\s*\)'
+    WHILE_LOOP_O_LOGN = r'(\w+)\s*(\*|/)=\s*\d+'
+    
+    
     max_depth = 0
     current_depth = 0
+    log_n_detected = False
+    inside_while = False
+    while_variable = None
 
-    # Split by lines for loop detection
     for line in code.splitlines():
-        # Detect loop start
-        if re.search(r'\b(for|while)\s*\(.*<\s*.*\)', line):
+        line = line.strip()  # Remove leading/trailing whitespace
+        
+        for_match = re.search(FOR_LOOP_O_N, line)
+        log_match = re.search(FOR_LOOP_O_LOGN, line)
+        
+        if for_match or log_match:
             current_depth += 1
             max_depth = max(max_depth, current_depth)
+            
+            # Check if this loop is logarithmic
+            if log_match:
+                log_n_detected = True
+        
+        # Detect while loop start
+        elif re.search(WHILE_LOOP_O_N, line):
+            while_match = re.search(WHILE_LOOP_O_N, line)
+            if while_match:
+                while_variable = while_match.group(1)
+                inside_while = True
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+        
+        # Check for logarithmic operations inside while loop
+        if inside_while and while_variable:
+            log_match = re.search(WHILE_LOOP_O_LOGN, line)
+            if log_match and log_match.group(1) == while_variable:
+                log_n_detected = True
 
-        # Detect block ending
+        # Detect block ending - only on closing braces
         if "}" in line:
-            # decrement only if we are inside a loop block
             if current_depth > 0:
                 current_depth -= 1
+                if inside_while and current_depth == 0:
+                    inside_while = False
+                    while_variable = None
 
     # Decide complexity from max depth
     if max_depth == 0:
-        return "Unknown"
-    elif max_depth == 1:
-        return "O(N)"
+        return "O(1)"
     else:
-        return f"O(N^{max_depth})"
+        time_complexity = ""
+        if max_depth == 1:
+            if log_n_detected:
+                time_complexity = "LogN"  # Single logarithmic loop
+            else:
+                time_complexity = "N"     # Single linear loop
+        else:
+            # If logarithmic detected, reduce the power by 1
+            if log_n_detected:
+                if max_depth == 2:
+                    time_complexity = "NLogN"  # N^2 becomes N*LogN when one loop is logarithmic
+                else:
+                    time_complexity = f"N^{max_depth-1}LogN"  # Reduce power by 1 and add LogN
+            else:
+                time_complexity = f"N^{max_depth}"
+
+        return f"O({time_complexity})"
     
     
-def analyze_logarithmic(code: str) -> str:
-
-    # Detect logN loops (i *= 2 or i /= 2)
-    if re.search(r'for\s*\(.*;.*[*/]=\s*2.*\)', code):
-        return "O(log N)"
-    if re.search(r'while\s*\(.*\)\s*{', code) and re.search(r'i\s*=\s*i\s*[/\*]=\s*2', code):
-        return "O(log N)"
-
-    # Detect recursive logarithmic patterns
-    functions = re.findall(r'\b(\w+)\s*\([^)]*\)\s*{', code)
-    
-    for func in functions:
-        # Look for the function body
-        func_pattern = rf'{func}\s*\([^)]*\)\s*{{([^{{}}]*(?:{{[^{{}}]*}}[^{{}}]*)*)}}'
-        func_match = re.search(func_pattern, code, re.DOTALL)
-        
-        if func_match:
-            func_body = func_match.group(1)
-            
-            # Check if it's a recursive function that divides the problem space
-            recursive_call_pattern = rf'{func}\s*\([^)]*\)'
-            
-            if re.search(recursive_call_pattern, func_body):
-                # Look for division patterns that indicate log N complexity
-                # Pattern 1: n/2, mid-1, mid+1 (binary search patterns)
-                if re.search(r'(n\s*/\s*2|mid\s*[-+]\s*1|left.*mid.*right)', func_body):
-                    return "O(log N)"
-                
-                # Pattern 2: exp/2 (power function with divide and conquer)
-                if re.search(r'(exp\s*/\s*2|n\s*/\s*2)', func_body):
-                    return "O(log N)"
-                
-                # Pattern 3: General division by 2 or halving pattern
-                if re.search(r'\w+\s*/\s*2', func_body):
-                    return "O(log N)"
-
-    return "Unknown"
 
 
 def analyze_factorial(code: str) -> str:
-
-    # Detect "permute" or recursion inside a loop (factorial growth)
-    if re.search(r'void\s+permute', code, re.IGNORECASE):
+    # Detect permutation/combination functions
+    if re.search(r'(permut|factorial|combinations?|arrangements?)', code, re.IGNORECASE):
         return "O(N!)"
+    
+    # Detect recursive calls inside loops (more specific)
+    functions = re.findall(r'\b(\w+)\s*\([^)]*\)\s*{', code)
+    
+    for func in functions:
+        # Look for function calling itself inside a loop
+        pattern = rf'for\s*\([^)]*\)\s*{{[^}}]*{func}\s*\([^)]*\)[^}}]*}}'
+        if re.search(pattern, code, re.DOTALL):
+            return "O(N!)"
+    
+    # Detect multiple recursive calls in same function (like generating all subsets/permutations)
+    for func in functions:
+        func_body_pattern = rf'{func}\s*\([^)]*\)\s*{{([^{{}}]*(?:{{[^{{}}]*}}[^{{}}]*)*)}}'
+        func_match = re.search(func_body_pattern, code, re.DOTALL)
+        
+        if func_match:
+            func_body = func_match.group(1)
+            recursive_calls = len(re.findall(rf'{func}\s*\([^)]*\)', func_body))
+            
+            # If multiple recursive calls + loop, likely factorial
+            if recursive_calls > 1 and re.search(r'for\s*\(', func_body):
+                return "O(N!)"
+    
+    return "O(1)"
 
-    # Generic heuristic: recursive call inside a for/while loop
-    if re.search(r'for\s*\(.*\)\s*{[^}]*\b\w+\s*\(.*\)', code, re.DOTALL):
-        return "O(N!)"
-
-    return "Unknown"
-
-import re
 
 def analyze_recursion(code: str) -> str:
     # Detect recursive calls (function calling itself)
     functions = re.findall(r'\b(\w+)\s*\([^)]*\)\s*{', code)  # function names
-    detected = "Unknown"
+    detected = "O(1)"  # Default if no recursion found
 
     for func in functions:
         # Look for the function body
@@ -124,7 +155,7 @@ if __name__ == "__main__":
     code = sys.stdin.read()
     
     highest_time_complexity = "O(1)" #Initialize max time complexity to O(1)
-    functions = [analyze_exponential, analyze_logarithmic, analyze_factorial, analyze_recursion] # Store functions in a list
+    functions = [analyze_exponential, analyze_factorial, analyze_recursion] # Store functions in a list
     time_complexity_serial = {   #In the dictionary, the time complexities are organized in ascending order and initializedd to False
         "O(log N)": False,
         "O(N)": False,
