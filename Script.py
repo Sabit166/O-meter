@@ -1,8 +1,7 @@
 import re
+import sys
 
-def analyze_exponential(file_path: str) -> str:
-    with open(file_path, "r") as f:
-        code = f.read()
+def analyze_exponential(code: str) -> str:
 
     max_depth = 0
     current_depth = 0
@@ -10,7 +9,7 @@ def analyze_exponential(file_path: str) -> str:
     # Split by lines for loop detection
     for line in code.splitlines():
         # Detect loop start
-        if re.search(r'\b(for|while)\s*\(.*<\s*N.*\)', line):
+        if re.search(r'\b(for|while)\s*\(.*<\s*.*\)', line):
             current_depth += 1
             max_depth = max(max_depth, current_depth)
 
@@ -29,9 +28,7 @@ def analyze_exponential(file_path: str) -> str:
         return f"O(N^{max_depth})"
     
     
-def analyze_logarithmic(file_path: str) -> str:
-    with open(file_path, "r") as f:
-        code = f.read()
+def analyze_logarithmic(code: str) -> str:
 
     # Detect logN loops (i *= 2 or i /= 2)
     if re.search(r'for\s*\(.*;.*[*/]=\s*2.*\)', code):
@@ -42,9 +39,7 @@ def analyze_logarithmic(file_path: str) -> str:
     return "Unknown"
 
 
-def analyze_factorial(file_path: str) -> str:
-    with open(file_path, "r") as f:
-        code = f.read()
+def analyze_factorial(code: str) -> str:
 
     # Detect "permute" or recursion inside a loop (factorial growth)
     if re.search(r'void\s+permute', code, re.IGNORECASE):
@@ -58,10 +53,7 @@ def analyze_factorial(file_path: str) -> str:
 
 import re
 
-def analyze_recursion(file_path: str) -> str:
-    with open(file_path, "r") as f:
-        code = f.read()
-
+def analyze_recursion(code: str) -> str:
     # Detect recursive calls (function calling itself)
     functions = re.findall(r'\b(\w+)\s*\([^)]*\)\s*{', code)  # function names
     detected = "Unknown"
@@ -89,8 +81,9 @@ def analyze_recursion(file_path: str) -> str:
 
 # Example usage:
 if __name__ == "__main__":
-    file = input("Enter C/CPP file path: ")
-
+    print("Enter your C/CPP code below. Press Ctrl+D (Unix/macOS) or Ctrl+Z then Enter (Windows) to finish:\n")
+    code = sys.stdin.read()
+    
     highest_time_complexity = "O(1)" #Initialize max time complexity to O(1)
     functions = [analyze_exponential, analyze_logarithmic, analyze_factorial] # Store functions in a list
     time_complexity_serial = {   #In the dictionary, the time complexities are organized in ascending order and initializedd to False
@@ -103,7 +96,7 @@ if __name__ == "__main__":
     }
     
     for func in functions:
-        result = func(file)
+        result = func(code)
         if result in time_complexity_serial:
             time_complexity_serial[result] = True
             
