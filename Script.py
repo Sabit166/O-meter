@@ -88,6 +88,57 @@ def analyze_exponential(code: str) -> str:
         return f"O({time_complexity})"
     
 
+def analyze_logarithmic(code: str) -> str:
+    """
+    Simplified function to detect O(log N) complexity patterns.
+    Detects these patterns:
+    1. for(type var=init; var<n; var*=2)
+    2. while(var<n) { var*=2; }
+    3. while(var) { var/=2; }
+    """
+    
+    # Pattern 1: for loop with multiplication in increment
+    for_logn_pattern = r'for\s*\([^;]*;\s*[^;]*;\s*\w+\s*\*=\s*\d+\s*\)'
+    
+    # Pattern 2 & 3: while loops
+    while_pattern = r'while\s*\([^)]+\)'
+    mult_div_pattern = r'\w+\s*(\*=|/=)\s*\d+'
+    
+    lines = code.splitlines()
+    found_for_logn = False
+    in_while_loop = False
+    found_while_logn = False
+    current_depth = 0
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Check for logarithmic for loop (Pattern 1)
+        if re.search(for_logn_pattern, line):
+            found_for_logn = True
+            current_depth += 1
+        
+        # Check for while loop start (Pattern 2 & 3)
+        elif re.search(while_pattern, line):
+            in_while_loop = True
+            current_depth += 1
+        
+        # Check for multiplication/division inside while loop
+        if in_while_loop and re.search(mult_div_pattern, line):
+            found_while_logn = True
+        
+        # Track closing braces
+        if '}' in line and current_depth > 0:
+            current_depth -= 1
+            if current_depth == 0:
+                in_while_loop = False
+    
+    # Return O(log N) if we found any logarithmic pattern and no nested loops
+    if (found_for_logn or found_while_logn) and current_depth == 0:
+        return "O(log N)"
+    else:
+        return "O(1)"
+
 
 def analyze_recursion(code: str) -> str:
     # Detect recursive calls (function calling itself)
@@ -186,7 +237,7 @@ if __name__ == "__main__":
     code = sys.stdin.read()
     
     highest_time_complexity = "O(1)" #Initialize max time complexity to O(1)
-    functions = [analyze_exponential, analyze_recursion] # Store functions in a list
+    functions = [analyze_exponential, analyze_logarithmic, analyze_recursion] # Store functions in a list
     time_complexity_serial = {   #In the dictionary, the time complexities are organized in ascending order and initializedd to False
         "O(1)": False,
         "O(log N)": False,
@@ -207,8 +258,8 @@ if __name__ == "__main__":
             
     for complexity in ["O(log N)", "O(N)", "O(NLogN)", "O(N^2)", "O(N^2LogN)", "O(N^3)", "O(N^4)", "O(2^N)", "O(N!)"]:
         if time_complexity_serial[complexity]:
-            highest_time_complexity = complexity        #Highest time complexity is updated if a higher complexity is found
+            highest_time_complexity = complexity        
             
 
     print("Worst-case complexity:", highest_time_complexity)
-    print("Detailed complexities:", time_complexity_serial)
+    # print("Detailed complexities:", time_complexity_serial)
