@@ -1,3 +1,4 @@
 *.c
 *.exe
 *.pyc
+env
